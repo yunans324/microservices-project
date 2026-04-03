@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Medical App</title>
+
+  <!-- Bootstrap biar bagus -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+</head>
+<body class="bg-light">
+
+<div class="container mt-5">
+  <div class="row g-4">
+    <div class="col-12 col-lg-5">
+      <div class="card shadow p-4 h-100">
+        <h2 class="text-center mb-4">🩺 Register Pasien</h2>
+
+        <div class="mb-3">
+          <label class="form-label">Nama</label>
+          <input type="text" id="name" class="form-control" placeholder="Masukkan nama">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Umur</label>
+          <input type="number" id="age" class="form-control" placeholder="Masukkan umur">
+        </div>
+
+        <button class="btn btn-primary w-100" onclick="kirimData()">Kirim Data</button>
+
+        <hr>
+
+        <h5 class="mb-2">Hasil (Response Backend):</h5>
+        <pre id="result" class="bg-dark text-white p-3 rounded mb-0"></pre>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card shadow p-4 mb-4">
+        <h4 class="mb-3">📊 Dashboard</h4>
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <div class="border rounded p-3 bg-white">
+              <div class="text-muted">Total Registrasi</div>
+              <div class="fs-4 fw-semibold" id="statTotal">0</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="border rounded p-3 bg-white">
+              <div class="text-muted">Rata-rata Umur</div>
+              <div class="fs-4 fw-semibold" id="statAvgAge">-</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="border rounded p-3 bg-white">
+              <div class="text-muted">Terakhir Submit</div>
+              <div class="fw-semibold" id="statLast">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow p-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h4 class="mb-0">🧾 History Data</h4>
+          <small class="text-muted">Tersimpan di browser (localStorage)</small>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-striped align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>Nama</th>
+                <th class="text-end">Umur</th>
+                <th>Diagnosis</th>
+                <th>History</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr>
+                <td colspan="6" class="text-muted">Belum ada data.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = "medicalAppHistory";
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(history) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+}
+
+function formatDateTime(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+function renderDashboard() {
+  const history = loadHistory();
+
+  // Stats
+  const total = history.length;
+  const avgAge = total
+    ? Math.round((history.reduce((sum, item) => sum + (Number(item.age) || 0), 0) / total) * 10) / 10
+    : null;
+  const last = total ? formatDateTime(history[0].timestamp) : "-";
+
+  document.getElementById("statTotal").innerText = String(total);
+  document.getElementById("statAvgAge").innerText = avgAge === null ? "-" : String(avgAge);
+  document.getElementById("statLast").innerText = last;
+
+  // History table
+  const tbody = document.getElementById("historyBody");
+  if (!total) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="text-muted">Belum ada data.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = history
+    .map((item) => {
+      const statusBadge = item.status === "success"
+        ? '<span class="badge text-bg-success">success</span>'
+        : '<span class="badge text-bg-danger">error</span>';
+
+      const diagnosis = item.grpc_data && item.grpc_data.diagnosis ? item.grpc_data.diagnosis : "-";
+      const grpcHistory = item.grpc_data && item.grpc_data.history ? item.grpc_data.history : "-";
+
+      return `
+        <tr>
+          <td>${formatDateTime(item.timestamp)}</td>
+          <td>${String(item.name ?? "-")}</td>
+          <td class="text-end">${Number.isFinite(Number(item.age)) ? Number(item.age) : "-"}</td>
+          <td>${String(diagnosis)}</td>
+          <td>${String(grpcHistory)}</td>
+          <td>${statusBadge}</td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+async function kirimData() {
+  const name = document.getElementById("name").value;
+  const age = document.getElementById("age").value;
+
+  const payload = {
+    name: name,
+    age: parseInt(age)
+  };
+
+  try {
+    const response = await fetch("http://localhost:3000/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    document.getElementById("result").innerText =
+      JSON.stringify(data, null, 2);
+
+    const history = loadHistory();
+    history.unshift({
+      timestamp: new Date().toISOString(),
+      name: payload.name,
+      age: payload.age,
+      status: data && data.status ? data.status : "success",
+      grpc_data: data && data.grpc_data ? data.grpc_data : null,
+    });
+    saveHistory(history.slice(0, 50));
+    renderDashboard();
+
+  } catch (error) {
+    document.getElementById("result").innerText =
+      "Error: " + error;
+
+    const history = loadHistory();
+    history.unshift({
+      timestamp: new Date().toISOString(),
+      name: payload.name,
+      age: payload.age,
+      status: "error",
+      grpc_data: null,
+      error: String(error)
+    });
+    saveHistory(history.slice(0, 50));
+    renderDashboard();
+  }
+}
+
+renderDashboard();
+</script>
+
+</body>
+</html>

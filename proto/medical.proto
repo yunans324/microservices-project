@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+service MedicalService {
+  rpc GetMedicalRecord (PatientRequest) returns (MedicalResponse);
+}
+
+message PatientRequest {
+  int32 patient_id = 1;
+}
+
+message MedicalResponse {
+  string diagnosis = 1;
+  string history = 2;
+}
