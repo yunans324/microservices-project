@@ -12,9 +12,14 @@ services:
     build: ./service-b
     ports:
       - "50051:50051"
+    volumes:
+      - service_b_data:/app/data
 
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "15672:15672"
       - "5672:5672"
+
+volumes:
+  service_b_data:
